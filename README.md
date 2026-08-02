@@ -1,5 +1,7 @@
 # Helvstack Agent Skills
 
+[![skills.sh](https://skills.sh/b/elyzesolutions/helvstack-skills)](https://www.skills.sh/elyzesolutions/helvstack-skills/helvstack-agent-deploy)
+
 Public, portable [Agent Skills](https://agentskills.io/) for deploying applications on [Helvstack](https://helvstack.com/).
 
 ## Install
@@ -26,6 +28,8 @@ npx skills add ElyzeSolutions/helvstack-skills --list
 ## Skills
 
 - `helvstack-agent-deploy`: inspect a repository, obtain least-privilege Helvstack access, plan changes, apply them idempotently, wait for terminal states, and return deployment evidence.
+
+Review the rendered skill and automated security audits on [skills.sh](https://www.skills.sh/elyzesolutions/helvstack-skills/helvstack-agent-deploy).
 
 The canonical human and machine onboarding guide is at [helvstack.com/agent](https://helvstack.com/agent).
 
