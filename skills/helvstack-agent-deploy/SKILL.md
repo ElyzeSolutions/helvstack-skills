@@ -53,7 +53,7 @@ helvstack --json services validate --from helvstack.yml
 If the CLI is missing and the private Helvstack source repository is available to the current Git identity, install it without changing the application repository:
 
 ```bash
-go install github.com/ElyzeSolutions/Helvstack/cmd/helvstack@latest
+GOPRIVATE=github.com/ElyzeSolutions/* go install github.com/ElyzeSolutions/Helvstack/cmd/helvstack@latest
 ```
 
 If source access is unavailable, use the direct agent API flow in section 7. Do not block the setup merely because the CLI is absent.
@@ -196,12 +196,18 @@ jq '{verificationUriComplete,userCode,expiresAt,intervalSeconds}' .helvstack/aut
 Ask the user to approve `verificationUriComplete`, then poll the returned `pollUri` at `intervalSeconds`. The authorized response returns the token once. Save it with mode `0600` and never print it:
 
 ```bash
+umask 077
+cleanup_auth_files() {
+  rm -f .helvstack/auth-poll.json .helvstack/auth-start.json
+}
+trap cleanup_auth_files EXIT
 poll_uri="$(jq -r .pollUri .helvstack/auth-start.json)"
 curl -fsS "$poll_uri" > .helvstack/auth-poll.json
 jq -e '.status == "authorized"' .helvstack/auth-poll.json >/dev/null
 jq '{apiUrl,apiToken:.token,project,environment}' .helvstack/auth-poll.json > .helvstack/config.json
 chmod 600 .helvstack/config.json
-rm .helvstack/auth-poll.json .helvstack/auth-start.json
+cleanup_auth_files
+trap - EXIT
 ```
 
 Read capabilities and OpenAPI through the scoped proxy, then call only paths permitted by the token:
@@ -211,6 +217,8 @@ api_url="$(jq -r .apiUrl .helvstack/config.json)"
 api_token="$(jq -r .apiToken .helvstack/config.json)"
 curl -fsS "$api_url/api/v1/capabilities" -H "Authorization: Bearer $api_token"
 curl -fsS "$api_url/api/v1/openapi.json" -H "Authorization: Bearer $api_token"
+operation_id="<operation-id>"
+curl -fsS "$api_url/api/v1/operations/$operation_id" -H "Authorization: Bearer $api_token"
 ```
 
 Keep token-bearing variables out of command output and shell tracing. Follow the same plan, idempotency, polling, and verification rules as the CLI path.
