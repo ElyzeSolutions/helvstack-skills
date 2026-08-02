@@ -50,13 +50,15 @@ helvstack capabilities --local
 helvstack --json services validate --from helvstack.yml
 ```
 
-If the CLI is missing and the Helvstack source repository is available to the current Git identity, install it without changing the application repository:
+If the CLI is missing and the private Helvstack source repository is available to the current Git identity, install it without changing the application repository:
 
 ```bash
 go install github.com/ElyzeSolutions/Helvstack/cmd/helvstack@latest
 ```
 
 If source access is unavailable, use the direct agent API flow in section 7. Do not block the setup merely because the CLI is absent.
+
+Do not claim that Helvstack has a public CLI binary, Homebrew formula, or npm package until a separately licensed distribution is published. The public Agent Skill and scoped REST flow are the supported external path today.
 
 ## 2. Model the application
 
