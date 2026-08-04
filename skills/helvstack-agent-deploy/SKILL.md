@@ -107,7 +107,7 @@ helvstack auth login \
 
 The CLI opens a browser approval page and stores a scoped token in `.helvstack/config.json`. Tell the user when the approval page is ready and include the displayed code. Resume automatically after approval.
 
-For a new self-service workspace, the approval page can require the user to activate the Launch plan first. Keep inspecting, editing, and validating locally while access is pending. Never start checkout, purchase a subscription, or imply that payment was completed without the user's explicit action. After activation, return to the same scoped login flow and continue from the remote plan.
+For a new self-service workspace, the approval page can require the user to activate the Launch plan first. Keep inspecting, editing, and validating locally while access is pending. Never start checkout, purchase a subscription, or imply that payment was completed without the user's explicit action. After activation, resume the same request if it is still pending. Device requests expire after 10 minutes; if it expired during activation, start a fresh scoped login and continue from the remote plan.
 
 For agents that explicitly control a browser:
 
