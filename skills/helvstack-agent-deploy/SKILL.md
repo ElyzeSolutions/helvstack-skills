@@ -128,7 +128,7 @@ helvstack --json services apply --from helvstack.yml --plan
 helvstack --json deploy --service <service> --plan
 ```
 
-For a Git source deployment with no explicit destination image, Helvstack assigns an image in its private managed registry. Do not ask the user for GHCR, Docker Hub, or GitLab registry credentials in that path. The worker provisions an environment-isolated registry project and separate build and pull-only runtime identities during apply; every build receives its own ephemeral push Secret, owned by that build job for crash-safe cleanup. The identities are finite-lived, rotate automatically outside active builds, and are revoked with the project when the environment is retired. Use `registry-provider` only when the user supplies an image from their own private external registry or explicitly chooses an external destination. Never copy a platform-wide registry credential into a tenant environment.
+Managed Harbor hosting is deferred. GitHub source builds default to the repository owner's GHCR namespace; GitLab source builds default to that project's GitLab Container Registry path. Before apply, configure the matching environment-scoped `ghcr` or `gitlab-registry` provider with credentials that can push and pull that destination. Use `services.<name>.build.destination` for an explicit destination. Never copy a platform-wide registry credential into a tenant environment, and never print or read back credential values.
 
 Summarize the exact project, environment, services, resource changes, domains, and monthly-price deltas shown by the plan. Obtain user confirmation at the normal action-time boundary before a consequential apply when the harness requires it.
 
