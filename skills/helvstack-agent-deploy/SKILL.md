@@ -94,6 +94,18 @@ services:
 
 Represent API, web, worker, scheduled-job, database, cache, volume, and object-storage requirements explicitly. For a monorepo, set each service's root directory, Dockerfile, watch paths, port, and health check independently.
 
+When repository or image evidence proves an application must run as a fixed non-root Linux identity, declare it explicitly on that application service:
+
+```yaml
+    runtimeIdentity:
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      capabilityPolicy: restricted
+```
+
+Do not guess a UID or GID. Do not set `fsGroup` merely because `runAsGroup` is set: `fsGroup` may recursively change mounted-volume ownership and is a separate, opt-in field. Omit `runtimeIdentity` for root-based third-party images. Confirm the effective security context in service-apply and deployment plan evidence before applying.
+
 ## 3. Request scoped access
 
 Infer a stable project slug from existing configuration or the repository name. Default the environment to `production` only when the user did not provide another target.
