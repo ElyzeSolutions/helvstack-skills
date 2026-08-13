@@ -101,7 +101,8 @@ When repository or image evidence proves an application must run as a fixed non-
       runAsNonRoot: true
       runAsUser: 10001
       runAsGroup: 10001
-      capabilityPolicy: restricted
+      capabilities:
+        drop: [ALL]
 ```
 
 Do not guess a UID or GID. Do not set `fsGroup` merely because `runAsGroup` is set: `fsGroup` may recursively change mounted-volume ownership and is a separate, opt-in field. Omit `runtimeIdentity` for root-based third-party images. Confirm the effective security context in service-apply and deployment plan evidence before applying.
