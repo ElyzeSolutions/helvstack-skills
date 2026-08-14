@@ -138,7 +138,7 @@ Run local validation first, then remote plans:
 ```bash
 helvstack --json services validate --from helvstack.yml
 helvstack --json services apply --from helvstack.yml --plan
-helvstack --json deploy --service <service> --plan
+helvstack --json up --service <service> --plan
 ```
 
 Managed Harbor hosting is deferred. GitHub source builds default to the repository owner's GHCR namespace; GitLab source builds default to that project's GitLab Container Registry path. Before apply, configure the matching environment-scoped `ghcr` or `gitlab-registry` provider with credentials that can push and pull that destination. Use `services.<name>.build.destination` for an explicit destination. Never copy a platform-wide registry credential into a tenant environment, and never print or read back credential values.
@@ -152,7 +152,7 @@ Use keys derived from the operation, service, and source revision. Reuse the sam
 ```bash
 revision="$(git rev-parse --short HEAD)"
 helvstack --json --idempotency-key "services-${revision}" services apply --from helvstack.yml --no-wait
-helvstack --json --idempotency-key "deploy-web-${revision}" deploy --service web --no-wait
+helvstack --json --idempotency-key "deploy-web-${revision}" up --service web --no-wait
 ```
 
 Deploy every source-built or image-backed runtime service explicitly. Do not deploy database, cache, volume, or object-storage declarations as if they were app images.
@@ -182,7 +182,7 @@ Custom domains require ownership verification and DNS routing before activation.
 Poll returned operation IDs. Do not treat `queued`, `accepted`, `pending`, or `running` as success.
 
 ```bash
-helvstack --json operations get <operation-id>
+helvstack --json operations wait <operation-id> --timeout 10m
 helvstack --json status <service>
 helvstack --json events
 helvstack --json logs <service>
@@ -190,6 +190,12 @@ helvstack --json doctor <service>
 ```
 
 Verify every required service, relevant health endpoint, and expected public URL. Check that no secret values appear in status, events, logs, or the final report.
+
+For local commands that need the same variable names, use `helvstack run` or
+`helvstack shell` with values already present in the caller's process or an
+explicit local `--env-file`. Helvstack retrieves key names only; it never
+decrypts stored values. `--json run` validates and returns metadata without
+executing the child process.
 
 Return a concise evidence report:
 
