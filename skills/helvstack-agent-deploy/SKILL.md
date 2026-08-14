@@ -141,6 +141,27 @@ helvstack --json services apply --from helvstack.yml --plan
 helvstack --json up --service <service> --plan
 ```
 
+Create or switch environments explicitly; environment creation is a pollable,
+idempotent namespace-reconciliation operation:
+
+```bash
+helvstack --json environment create <environment> --plan
+helvstack --json --idempotency-key "environment-<environment>" environment create <environment>
+helvstack environment select <environment>
+```
+
+For Git sources, inspect the provider App before connecting the service. Use the
+browser installation flow when the repository is not yet authorized, then
+review the source plan. Push automation fails closed until the exact repository
+grant is visible:
+
+```bash
+helvstack --json git-provider apps status
+helvstack git-provider apps install --provider github
+helvstack --json source connect --service web --repository https://github.com/<owner>/<repo> --branch main --automation push --plan
+helvstack --json --idempotency-key "source-web-<git-sha>" source connect --service web --repository https://github.com/<owner>/<repo> --branch main --automation push
+```
+
 Managed Harbor hosting is deferred. GitHub source builds default to the repository owner's GHCR namespace; GitLab source builds default to that project's GitLab Container Registry path. Before apply, configure the matching environment-scoped `ghcr` or `gitlab-registry` provider with credentials that can push and pull that destination. Use `services.<name>.build.destination` for an explicit destination. Never copy a platform-wide registry credential into a tenant environment, and never print or read back credential values.
 
 Summarize the exact project, environment, services, resource changes, domains, and monthly-price deltas shown by the plan. Obtain user confirmation at the normal action-time boundary before a consequential apply when the harness requires it.
@@ -186,7 +207,20 @@ helvstack --json operations wait <operation-id> --timeout 10m
 helvstack --json status <service>
 helvstack --json events
 helvstack --json logs <service>
+helvstack logs <service> --follow
 helvstack --json doctor <service>
+```
+
+`logs --follow` emits redacted lines continuously; with global `--json` it
+emits one structured JSON object per line so agents can process the stream.
+Service suspension is deliberately reversible and retains configuration,
+history, variables, and persistent volumes:
+
+```bash
+helvstack --json down --service <service> --plan
+helvstack --json --idempotency-key "suspend-<service>" down --service <service>
+helvstack --json resume --service <service> --plan
+helvstack --json --idempotency-key "resume-<service>" resume --service <service>
 ```
 
 Verify every required service, relevant health endpoint, and expected public URL. Check that no secret values appear in status, events, logs, or the final report.
@@ -262,9 +296,9 @@ After CLI login, an MCP-capable harness can use:
 helvstack mcp serve
 ```
 
-The stdio server reads the scoped local config. Start with `helvstack_capabilities`, plan before mutation, and use the typed tools when available.
+The stdio server reads the scoped local config. Start with `helvstack_capabilities`, plan before mutation, and use the typed tools when available. Environment inventory/creation, provider-App status/installation, source inspection/connection, and reversible lifecycle are exposed as `helvstack_environments`, `helvstack_environment_create`, `helvstack_git_provider_apps`, `helvstack_git_provider_app_install`, `helvstack_source_status`, `helvstack_source_connect`, and `helvstack_service_lifecycle`; mutation tools default to plan mode.
 
-The signed-in browser console also exposes scoped WebMCP tools for onboarding guidance, context, deploy planning, reviewed apply, operation watching, and opening relevant human-visible surfaces.
+The signed-in browser console also exposes scoped WebMCP tools for onboarding guidance, context, deploy planning, source status, reversible lifecycle planning/apply, reviewed deployment apply, operation watching, and opening relevant human-visible surfaces. Browser mutations require exact reviewed scope plus explicit confirmation.
 
 ## Cleanup
 
