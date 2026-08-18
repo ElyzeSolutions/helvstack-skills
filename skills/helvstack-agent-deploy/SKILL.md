@@ -178,6 +178,8 @@ helvstack --json --idempotency-key "deploy-web-${revision}" up --service web --n
 
 Deploy every source-built or image-backed runtime service explicitly. Do not deploy database, cache, volume, or object-storage declarations as if they were app images.
 
+Volume-backed web and worker rollouts stay Kubernetes `Recreate`. Helvstack prefers the current RWO node and warms the replacement image before detach; web traffic then receives a retryable `503` with `Retry-After: 10` until the new writer is Ready. Plans and results report `zeroDowntime: false`, `sameNodeHandoff`, and `imagePrePulled`. Treat that window as expected, not as a failed deploy.
+
 For variables, always plan first:
 
 ```bash
