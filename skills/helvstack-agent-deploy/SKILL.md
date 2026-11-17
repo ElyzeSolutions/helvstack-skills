@@ -94,18 +94,17 @@ services:
 
 Represent API, web, worker, scheduled-job, database, cache, volume, and object-storage requirements explicitly. For a monorepo, set each service's root directory, Dockerfile, watch paths, port, and health check independently.
 
-When repository or image evidence proves an application must run as a fixed non-root Linux identity, declare it explicitly on that application service:
+New web, worker, and scheduled-job services run as non-root by default: the image's own `USER` with `runAsNonRoot`, every capability dropped, and no privilege escalation. A service deployed before that default keeps its root-compatible template until it stores a numeric identity; its plans and deploys carry a warning that names the fix. Prefer images that already run as a non-root user and listen on a port at or above 1024, such as `nginxinc/nginx-unprivileged` on port 8080 instead of the official nginx image. Kubernetes cannot verify a named image `USER` such as `node` or `nextjs` under the non-root default, so the deploy fails until a numeric identity is declared. When repository or image evidence proves the numeric non-root identity an application runs as, declare it explicitly on that application service:
 
 ```yaml
     runtimeIdentity:
-      runAsNonRoot: true
       runAsUser: 10001
       runAsGroup: 10001
       capabilities:
         drop: [ALL]
 ```
 
-Do not guess a UID or GID. Do not set `fsGroup` merely because `runAsGroup` is set: `fsGroup` may recursively change mounted-volume ownership and is a separate, opt-in field. Omit `runtimeIdentity` for root-based third-party images. Confirm the effective security context in service-apply and deployment plan evidence before applying.
+Do not guess a UID or GID. Do not set `fsGroup` merely because `runAsGroup` is set: `fsGroup` may recursively change mounted-volume ownership and is a separate, opt-in field. Only when the image must start as root, and the user accepts that, set the per-service opt-out `runtimeIdentity.allowRoot: true`. It permits uid 0 only: every capability stays dropped except `NET_BIND_SERVICE` below port 1024, so it does not fix images that chown or switch user at startup. The official nginx image is one; use `nginxinc/nginx-unprivileged` on port 8080 instead of `allowRoot`. If a deploy fails with a non-root or permission error, follow the fix it names instead of retrying. Confirm the effective security context in service-apply and deployment plan evidence before applying.
 
 ## 3. Request scoped access
 
@@ -118,7 +117,7 @@ helvstack auth login \
   --name "<repository> deploy agent"
 ```
 
-The CLI opens a browser approval page and stores a scoped token in `.helvstack/config.json`. Tell the user when the approval page is ready and include the displayed code. Resume automatically after approval.
+The CLI opens a browser approval page and stores a scoped token in `.helvstack/config.json`. Tell the user when the approval page is ready and include the printed `Code:`; the page asks the user to type that code before Approve works, and five wrong codes close the request. Resume automatically after approval.
 
 For a new self-service workspace, the approval page can require the user to activate the Launch plan first. Keep inspecting, editing, and validating locally while access is pending. Never start checkout, purchase a subscription, or imply that payment was completed without the user's explicit action. After activation, resume the same request if it is still pending. Device requests expire after 10 minutes; if it expired during activation, start a fresh scoped login and continue from the remote plan.
 
@@ -129,7 +128,7 @@ helvstack --json auth start --project <project> --environment <environment> --na
 helvstack --json auth poll --device-code <deviceCode> --wait
 ```
 
-Use `verificationUriComplete` for the approval page. Pending responses expose `browser.opened` and `browser.signedIn`; use those fields instead of scraping the approval page.
+Use `verificationUriComplete` for the approval page. If you drive the browser for the user, read `userCode` from the start JSON and type it into the code field; never approve a request you did not start. Pending responses expose `browser.opened` and `browser.signedIn`; use those fields instead of scraping the approval page.
 
 ## 4. Validate and plan
 
@@ -260,7 +259,7 @@ curl -fsS https://console.helvstack.com/api/agent/auth/start \
 jq '{verificationUriComplete,userCode,expiresAt,intervalSeconds}' .helvstack/auth-start.json
 ```
 
-Ask the user to approve `verificationUriComplete`, then poll the returned `pollUri` at `intervalSeconds`. The authorized response returns the token once. Save it with mode `0600` and never print it:
+Ask the user to open `verificationUriComplete` and type the `userCode` shown above, then poll the returned `pollUri` at `intervalSeconds`. The authorized response returns the token once. Save it with mode `0600` and never print it:
 
 ```bash
 umask 077
