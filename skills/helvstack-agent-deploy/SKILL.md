@@ -303,7 +303,7 @@ For a small app with its own data (a feedback form, a photo wall, a sign-up shee
 2. Apply the listed steps in order, each with an `Idempotency-Key`. Create the project only if it is missing. Then `POST .../services` with `{"slug": "web", "type": "web", "preset": "mini", "shortName": "<name>"}`, which creates the 1 GiB `/data` volume and claims the name. Set `OWNER_PASSWORD` as a variable and the guest password with `PUT .../access/password` when the user wants them. Last, `POST .../deployments` with `{"source": {"type": "files", "preset": "mini", "files": [...]}}`.
 3. Wait for the deploy operation, then verify the URL and `/health`.
 
-The files are only `server.ts` and files under `public/`; Helvstack writes the Dockerfile. `server.ts` runs on Bun with `bun:sqlite` and no npm packages, and it listens on port 8080. Keep data in `process.env.DATABASE_PATH` (`/data/app.db`) and uploads in `process.env.UPLOADS_DIR` (`/data/uploads`): only `/data` survives a redeploy. The app runs one replica. Over MCP, `create_mini_app` does all of this in one tool call.
+The files are only `server.ts` and files under `public/`; Helvstack writes the Dockerfile. `server.ts` runs on Bun with `bun:sqlite` and no npm packages, and it listens on port 8080. Keep data in `process.env.DATABASE_PATH` (`/data/app.db`) and uploads in `process.env.UPLOADS_DIR` (`/data/uploads`): only `/data` survives a redeploy. The app runs one replica. Over MCP, `create_mini_app` does all of this in one tool call. To change an app that is already online, call `get_app_files` first (`GET .../services/{service}/source-files` returns the files of the latest successful files deploy). Edit them, then deploy every file again to the same project and service, so the link and the data stay.
 
 ## MCP
 
