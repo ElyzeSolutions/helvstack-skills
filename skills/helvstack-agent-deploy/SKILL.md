@@ -299,15 +299,37 @@ To keep a public preview private, protect the web service with a shared password
 
 For a small app with its own data (a feedback form, a photo wall, a sign-up sheet), use the mini preset instead of writing a Dockerfile:
 
-1. `POST /api/v1/mini-apps/plan` with `{"project": "<slug>", "environment": "production", "service": "web", "shortName": "<name>", "files": [...], "setGuestPassword": true, "setOwnerPassword": true}`. It works before the project exists, validates the files, says whether `<name>.apps.helvstack.com` is free (`miniApp.hostname.status`), and lists the apply steps. Stop and ask for another name when the plan is `blocked`.
-2. Apply the listed steps in order, each with an `Idempotency-Key`. Create the project only if it is missing. Then `POST .../services` with `{"slug": "web", "type": "web", "preset": "mini", "shortName": "<name>"}`, which creates the 1 GiB `/data` volume and claims the name. Set `OWNER_PASSWORD` as a variable and the guest password with `PUT .../access/password` when the user wants them. Last, `POST .../deployments` with `{"source": {"type": "files", "preset": "mini", "files": [...]}}`.
+1. `POST /api/v1/mini-apps/plan` with `{"project": "<slug>", "environment": "production", "service": "web", "shortName": "<name>", "files": [...], "setGuestPassword": true}`. It works before the project exists, validates the files, says whether `<name>.apps.helvstack.com` is free (`miniApp.hostname.status`), and lists the apply steps. A new mini app gets Helvstack sign-in (`access.signIn`); pass `"signIn": false` to leave it off. Stop and ask for another name when the plan is `blocked`.
+2. Apply the listed steps in order, each with an `Idempotency-Key`. Create the project only if it is missing. Then `POST .../services` with `{"slug": "web", "type": "web", "preset": "mini", "shortName": "<name>"}`, which creates the 1 GiB `/data` volume and claims the name. Turn on sign-in with `PUT .../access/sign-in` (the `set_app_sign_in` step), and set the guest password with `PUT .../access/password` when the user wants one. Last, `POST .../deployments` with `{"source": {"type": "files", "preset": "mini", "files": [...]}}`.
 3. Wait for the deploy operation, then verify the URL and `/health`.
 
 The files are only `server.ts` and files under `public/`; Helvstack writes the Dockerfile. `server.ts` runs on Bun with `bun:sqlite` and no npm packages, and it listens on port 8080. Keep data in `process.env.DATABASE_PATH` (`/data/app.db`) and uploads in `process.env.UPLOADS_DIR` (`/data/uploads`): only `/data` survives a redeploy. The app runs one replica. Over MCP, `create_mini_app` does all of this in one tool call. To change an app that is already online, call `get_app_files` first (`GET .../services/{service}/source-files` returns the files of the latest successful files deploy). Edit them, then deploy every file again to the same project and service, so the link and the data stay.
 
+## App sign-in: who is visiting
+
+Never build a login form, store or compare passwords, set an auth cookie, or ask the user for an owner password. Helvstack signs people in at the edge. With sign-in on (`helvstack access sign-in on`, `PUT .../access/sign-in`, or MCP `set_app_sign_in`), every request reaches the app with headers that only Helvstack can set; the edge deletes any copy a client sends:
+
+- `X-Helvstack-Role`: `owner` (an owner or admin of the workspace) or `visitor` (everyone else).
+- `X-Helvstack-User`: a stable id for a signed-in person, different in every app. It is absent for anonymous visitors.
+- `X-Helvstack-Name`: the display name, percent-encoded. A person typed it, so escape it when you print it.
+- `X-Helvstack-Identity`: a 120-second EdDSA JWT with the same claims. Verify it against `https://signin.helvstack.com/.well-known/jwks.json` (`aud` is the app's origin, `iss` is `https://signin.helvstack.com`) when the service is reachable other than through its public domain.
+
+```ts
+function who(req: Request) {
+  const h = req.headers;
+  // HELVSTACK_DEV_ROLE is only for your own machine: Helvstack always sets HELVSTACK_APP_SIGNIN (on or off), so it never applies there.
+  const sent = h.get("x-helvstack-role") ?? (process.env.HELVSTACK_APP_SIGNIN ? "" : process.env.HELVSTACK_DEV_ROLE ?? "");
+  let name = "";
+  try { name = decodeURIComponent(h.get("x-helvstack-name") ?? ""); } catch {}
+  return { role: sent === "owner" ? "owner" : "visitor", id: h.get("x-helvstack-user"), name };
+}
+```
+
+Compare roles by allowlist (`=== "owner"`): any other value, including a missing or unknown one, is a visitor. Link the owner to `/.helvstack/sign-in?return=/admin` and to `/.helvstack/sign-out`. Change data only on POST, PUT or DELETE, never on GET. A signed-in owner is not asked for the guest password. Run the app locally with `HELVSTACK_DEV_ROLE=owner bun server.ts`. On Helvstack every web app gets `HELVSTACK_APP_SIGNIN` (`on` or `off`), so the snippet ignores `HELVSTACK_DEV_ROLE` there, and Helvstack refuses `HELVSTACK_DEV_*` variables and `.env` files or Dockerfiles that set one.
+
 ## MCP
 
-Chat assistants without a shell (Claude.ai, ChatGPT) connect to the remote MCP server at `https://console.helvstack.com/mcp` as a custom connector. It uses OAuth 2.1 with dynamic client registration; the user approves once in the browser. Start with `get_helvstack_guide`; tools plan by default and `get_operation` waits for builds. `create_mini_app` builds a whole mini app in one call.
+Chat assistants without a shell (Claude.ai, ChatGPT) connect to the remote MCP server at `https://console.helvstack.com/mcp` as a custom connector. It uses OAuth 2.1 with dynamic client registration; the user approves once in the browser. Start with `get_helvstack_guide`; tools plan by default and `get_operation` waits for builds. `create_mini_app` takes a whole mini app from files to a live link in one call, with sign-in on: it checks its plan and, when that adds no charge, applies and waits until the link answers; when it would cost money it changes nothing and returns the price, so tell the user the link name and price and apply with `plan: false` only after they agree. Send the finished app, never a placeholder, and let Helvstack make the guest code (`makeGuestCode`) instead of inventing one; the owner signs in with Helvstack and needs no code. `check_app` opens the live app from the server to verify it. `set_app_sign_in` turns sign-in on or off for any web service.
 
 After CLI login, an MCP-capable harness can use:
 
@@ -317,7 +339,7 @@ helvstack mcp serve
 
 The stdio server reads the scoped local config. Start with `helvstack_capabilities`, plan before mutation, and use the typed tools when available. Environment inventory/creation, provider-App status/installation, source inspection/connection, and reversible lifecycle are exposed as `helvstack_environments`, `helvstack_environment_create`, `helvstack_git_provider_apps`, `helvstack_git_provider_app_install`, `helvstack_source_status`, `helvstack_source_connect`, and `helvstack_service_lifecycle`; mutation tools default to plan mode.
 
-The signed-in browser console also exposes scoped WebMCP tools for onboarding guidance, context, deploy planning, source status, reversible lifecycle planning/apply, reviewed deployment apply, operation watching, and opening relevant human-visible surfaces. Browser mutations require exact reviewed scope plus explicit confirmation.
+The signed-in browser console also exposes scoped WebMCP tools for onboarding guidance, context, deploy planning, source status, reversible lifecycle planning/apply, app sign-in planning/apply, reviewed deployment apply, operation watching, and opening relevant human-visible surfaces. Browser mutations require exact reviewed scope plus explicit confirmation.
 
 ## Cleanup
 
