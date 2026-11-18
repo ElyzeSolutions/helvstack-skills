@@ -161,7 +161,7 @@ helvstack --json source connect --service web --repository https://github.com/<o
 helvstack --json --idempotency-key "source-web-<git-sha>" source connect --service web --repository https://github.com/<owner>/<repo> --branch main --automation push
 ```
 
-Managed Harbor hosting is deferred. GitHub source builds default to the repository owner's GHCR namespace; GitLab source builds default to that project's GitLab Container Registry path. Before apply, configure the matching environment-scoped `ghcr` or `gitlab-registry` provider with credentials that can push and pull that destination. Use `services.<name>.build.destination` for an explicit destination. Never copy a platform-wide registry credential into a tenant environment, and never print or read back credential values.
+Managed Harbor hosting is deferred. GitHub source builds default to the repository owner's GHCR namespace; GitLab source builds default to that project's GitLab Container Registry path. Before the first source build in a workspace, configure the matching `ghcr` or `gitlab-registry` provider once with credentials that can push and pull that destination; every other project and environment in the workspace reuses it (`registry-provider get` reports `scope: workspace`), so do not ask the user for a token again. Use `services.<name>.build.destination` for an explicit destination. Never copy a platform-wide registry credential into a tenant environment, and never print or read back credential values.
 
 Summarize the exact project, environment, services, resource changes, domains, and monthly-price deltas shown by the plan. Obtain user confirmation at the normal action-time boundary before a consequential apply when the harness requires it.
 
@@ -289,7 +289,25 @@ curl -fsS "$api_url/api/v1/operations/$operation_id" -H "Authorization: Bearer $
 
 Keep token-bearing variables out of command output and shell tracing. Follow the same plan, idempotency, polling, and verification rules as the CLI path.
 
+## No-Git deploys and app passwords
+
+When the app exists only as files (for example an assistant wrote it in chat), deploy it without a repository: `POST .../services/<service>/deployments/plan` with `{"source": {"type": "files", "preset": "static", "files": [{"path": "index.html", "content": "..."}]}}`, then the same body to `.../deployments` with an `Idempotency-Key`. Use `preset: "static"` for plain HTML, CSS and JavaScript, or include a Dockerfile that listens on the service port and runs as a non-root user. Limits: 200 files, 700 KiB of UTF-8 text. Never put secrets in files; set them as variables.
+
+To keep a public preview private, protect the web service with a shared password: `PUT .../services/<service>/access/password` with `{"username": "guest", "password": "<at least 10 characters>"}` after `POST .../access/password/plan`. Helvstack stores only a bcrypt hash. Give the credentials to the user once and never echo them again.
+
+## Mini apps
+
+For a small app with its own data (a feedback form, a photo wall, a sign-up sheet), use the mini preset instead of writing a Dockerfile:
+
+1. `POST /api/v1/mini-apps/plan` with `{"project": "<slug>", "environment": "production", "service": "web", "shortName": "<name>", "files": [...], "setGuestPassword": true, "setOwnerPassword": true}`. It works before the project exists, validates the files, says whether `<name>.apps.helvstack.com` is free (`miniApp.hostname.status`), and lists the apply steps. Stop and ask for another name when the plan is `blocked`.
+2. Apply the listed steps in order, each with an `Idempotency-Key`. Create the project only if it is missing. Then `POST .../services` with `{"slug": "web", "type": "web", "preset": "mini", "shortName": "<name>"}`, which creates the 1 GiB `/data` volume and claims the name. Set `OWNER_PASSWORD` as a variable and the guest password with `PUT .../access/password` when the user wants them. Last, `POST .../deployments` with `{"source": {"type": "files", "preset": "mini", "files": [...]}}`.
+3. Wait for the deploy operation, then verify the URL and `/health`.
+
+The files are only `server.ts` and files under `public/`; Helvstack writes the Dockerfile. `server.ts` runs on Bun with `bun:sqlite` and no npm packages, and it listens on port 8080. Keep data in `process.env.DATABASE_PATH` (`/data/app.db`) and uploads in `process.env.UPLOADS_DIR` (`/data/uploads`): only `/data` survives a redeploy. The app runs one replica. Over MCP, `create_mini_app` does all of this in one tool call.
+
 ## MCP
+
+Chat assistants without a shell (Claude.ai, ChatGPT) connect to the remote MCP server at `https://console.helvstack.com/mcp` as a custom connector. It uses OAuth 2.1 with dynamic client registration; the user approves once in the browser. Start with `get_helvstack_guide`; tools plan by default and `get_operation` waits for builds. `create_mini_app` builds a whole mini app in one call.
 
 After CLI login, an MCP-capable harness can use:
 
