@@ -309,7 +309,7 @@ The files are only `server.ts` and files under `public/`; Helvstack writes the D
 
 Never build a login form, store or compare passwords, set an auth cookie, or ask the user for an owner password. Helvstack signs people in at the edge. With sign-in on (`helvstack access sign-in on`, `PUT .../access/sign-in`, or MCP `set_app_sign_in`), every request reaches the app with headers that only Helvstack can set; the edge deletes any copy a client sends:
 
-- `X-Helvstack-Role`: `owner` (an owner or admin of the workspace) or `visitor` (everyone else).
+- `X-Helvstack-Role`: `owner` (an owner or admin of the workspace, or someone a workspace owner or admin added as an owner of this app) or `visitor` (everyone else).
 - `X-Helvstack-User`: a stable id for a signed-in person, different in every app. It is absent for anonymous visitors.
 - `X-Helvstack-Name`: the display name, percent-encoded. A person typed it, so escape it when you print it.
 - `X-Helvstack-Identity`: a 120-second EdDSA JWT with the same claims. Verify it against `https://signin.helvstack.com/.well-known/jwks.json` (`aud` is the app's origin, `iss` is `https://signin.helvstack.com`) when the service is reachable other than through its public domain.
