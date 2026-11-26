@@ -289,6 +289,10 @@ curl -fsS "$api_url/api/v1/operations/$operation_id" -H "Authorization: Bearer $
 
 Keep token-bearing variables out of command output and shell tracing. Follow the same plan, idempotency, polling, and verification rules as the CLI path.
 
+## Operating a mini app's data
+
+On an app using the branded guest-password gate, implement a narrow JSON POST at `/api/actions/<action>` and optionally a single-tool MCP endpoint at that path plus `/mcp`. Require the gate's visitor role and `X-Helvstack-User` exactly `action:<action>` in both handlers. Share business validation with the app and commit the idempotency receipt in the same transaction as the data. The owner issues or revokes a key at `/.helvstack/action-access/<action>` and enters the Authorization header directly in connector settings. For a shell client, bind `HELVSTACK_APP_ACTION_URL` and `HELVSTACK_APP_ACTION_KEY` locally, then run `helvstack app call < input.json`. Keep the key out of chat and source. Use `get_app_files` on the deployment connector for code changes.
+
 ## No-Git deploys and app passwords
 
 When the app exists only as files (for example an assistant wrote it in chat), deploy it without a repository: `POST .../services/<service>/deployments/plan` with `{"source": {"type": "files", "preset": "static", "files": [{"path": "index.html", "content": "..."}]}}`, then the same body to `.../deployments` with an `Idempotency-Key`. Use `preset: "static"` for plain HTML, CSS and JavaScript, or include a Dockerfile that listens on the service port and runs as a non-root user. Limits: 200 files, 700 KiB of UTF-8 text. Never put secrets in files; set them as variables.
