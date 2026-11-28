@@ -187,6 +187,9 @@ helvstack --json --idempotency-key "env-web-${revision}" env import --from-file 
 ```
 
 Do not display the file contents. Prefer trusted secret stores or protected local files.
+Poll each variable operation's status with `helvstack operations get` or wait
+with `helvstack operations wait`. The operation events endpoint returns `[]` for
+variable writes.
 
 For domains:
 
@@ -291,7 +294,41 @@ Keep token-bearing variables out of command output and shell tracing. Follow the
 
 ## Operating a mini app's data
 
-On an app using the branded guest-password gate, implement a narrow JSON POST at `/api/actions/<action>` and optionally a single-tool MCP endpoint at that path plus `/mcp`. Require the gate's visitor role and `X-Helvstack-User` exactly `action:<action>` in both handlers. Share business validation with the app and commit the idempotency receipt in the same transaction as the data. To connect an assistant, the owner adds the `/mcp` URL as a custom connector with no authentication settings. The assistant sends the owner to Helvstack sign-in, and the owner clicks Allow (OAuth with PKCE; no key or header to paste). For scripts, the owner issues a key at `/.helvstack/action-access/<action>`. Revoke there ends keys and assistant connections. For a shell client, bind `HELVSTACK_APP_ACTION_URL` and `HELVSTACK_APP_ACTION_KEY` locally, then run `helvstack app call < input.json`. Keep the key out of chat and source. Use `get_app_files` on the deployment connector for code changes.
+Actions work on a web app with Helvstack sign-in on and a guest password, so its guests see the branded guest-password page. A public sign-in app can't expose actions yet. In a mini app, declare them as `actions` beside `routes` in `server.ts`, in the default export or in `Bun.serve`. A complete `server.ts`:
+
+```ts
+import { Database } from "bun:sqlite";
+
+const db = new Database(process.env.DATABASE_PATH);
+db.run("CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, amount TEXT NOT NULL, note TEXT NOT NULL)");
+
+export default {
+  actions: {
+    add_expense: {
+      title: "Add an expense",
+      description: "Add one expense to the budget. Returns its id.",
+      db,
+      schema: {
+        type: "object",
+        required: ["amount", "note"],
+        properties: {
+          amount: { type: "string", pattern: "^(0|[1-9][0-9]{0,8})([.][0-9]{1,2})?$" },
+          note: { type: "string", minLength: 1, maxLength: 200 },
+        },
+      },
+      handler(input, ctx) {
+        const result = ctx.db.run("INSERT INTO expenses (amount, note) VALUES (?, ?)", [input.amount, input.note]);
+        return { id: Number(result.lastInsertRowid) };
+      },
+    },
+  },
+  routes: {
+    "/": () => new Response("Budget"),
+  },
+};
+```
+
+The runtime serves `POST /api/actions/<action>`, a stateless MCP endpoint at that path plus `/mcp`, and an owner-only `/openapi.json`. It requires the gate's visitor role and `X-Helvstack-User` exactly `action:<action>`, validates input against the JSON Schema, and commits a `requestId` receipt in the same SQLite transaction as each write. Write handlers are synchronous, need `db` on the action and write through `ctx.db`, the write's own transaction, one `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `REPLACE`, `WITH` or `VALUES` statement per call (no PRAGMA, schema change or transaction control: create tables at startup); `ctx.replay(body)` answers a retry the app recorded itself. `readOnly: true` tools may be async and need no `db`. Put several related operations under one permission with `tools: { <tool>: { description, schema, handler } }`. Use `ctx.fail(message)` for a refusal the caller should see. Keep the app's existing schema. Outside the mini runtime, implement the same POST and `/mcp` endpoints with the same header check, and share business validation with the app. To connect an assistant, the owner clicks **Connect to Claude** next to the action on the app's page in the Helvstack console, or adds the `/mcp` URL as a custom connector with no authentication settings. The assistant sends the owner to Helvstack sign-in, and the owner clicks Allow (OAuth with PKCE; no key or header to paste). For scripts, the owner issues a key at `/.helvstack/action-access/<action>`. Revoke there ends the owner's own key and assistant connections; **Revoke access** on the app's page in the Helvstack console ends every owner's, even after the guest password was removed. Connect uses the app's generated managed link (`*.helvstack.app`, or `*.apps.helvstack.com` for older apps). For a shell client, bind `HELVSTACK_APP_ACTION_URL` and `HELVSTACK_APP_ACTION_KEY` locally, then run `helvstack app call < input.json`. Keep the key out of chat and source. Use `get_app_files` on the deployment connector for code changes.
 
 ## No-Git deploys and app passwords
 
